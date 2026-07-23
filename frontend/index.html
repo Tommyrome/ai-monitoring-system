@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Camera Monitoring System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="scanline-overlay"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◈</span>
+    <div class="brand-text">
+      <span class="brand-title">AI CAMERA MONITORING</span>
+      <span class="brand-sub">sistema di analisi intelligente degli ambienti</span>
+    </div>
+  </div>
+
+  <div class="conn-status">
+    <span class="dot" id="conn-dot"></span>
+    <span id="conn-label">CONNESSIONE...</span>
+  </div>
+
+  <div class="login-box" id="login-box">
+    <input type="text" id="username" placeholder="username" value="admin">
+    <input type="password" id="password" placeholder="password" value="admin123">
+    <button id="login-btn">ACCEDI</button>
+  </div>
+</header>
+
+<main class="grid">
+
+  <section class="panel cameras-panel">
+    <h2 class="panel-title">TELECAMERE <span class="count-badge" id="camera-count">0</span></h2>
+    <div class="camera-grid" id="camera-grid">
+      <!-- popolato via JS -->
+    </div>
+  </section>
+
+  <section class="panel stats-panel">
+    <h2 class="panel-title">STATISTICHE</h2>
+    <div class="stat-row">
+      <div class="stat-card">
+        <span class="stat-value" id="stat-total">0</span>
+        <span class="stat-label">EVENTI OGGI</span>
+      </div>
+      <div class="stat-card stat-warning">
+        <span class="stat-value" id="stat-warning">0</span>
+        <span class="stat-label">WARNING</span>
+      </div>
+      <div class="stat-card stat-critical">
+        <span class="stat-value" id="stat-critical">0</span>
+        <span class="stat-label">CRITICAL</span>
+      </div>
+    </div>
+    <canvas id="events-chart" height="140"></canvas>
+  </section>
+
+  <section class="panel log-panel">
+    <h2 class="panel-title">EVENT LOG <span class="live-tag">● LIVE</span></h2>
+    <div class="event-log" id="event-log">
+      <div class="log-empty">In attesa di eventi dal sistema di rilevamento...</div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

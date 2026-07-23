@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aicam-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aicam
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: aicam-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/aicam?sslmode=disable
+      JWT_SECRET: dev-secret-change-me
+      AI_SERVICE_TOKEN: change-me-shared-secret
+      PORT: 8080
+    ports:
+      - "8080:8080"
+
+  # Nota: il servizio AI richiede accesso alla webcam dell'host.
+  # Su Linux e' possibile passare il device con --device=/dev/video0.
+  # Su macOS/Windows con Docker Desktop l'accesso diretto alla webcam
+  # non e' supportato: in quel caso esegui ai-service direttamente
+  # sull'host (vedi README) invece che in container.
+  ai-service:
+    build: ./ai-service
+    container_name: aicam-ai-service
+    depends_on:
+      - backend
+    devices:
+      - "/dev/video0:/dev/video0"
+    environment:
+      BACKEND_URL: http://backend:8080
+      AI_SERVICE_TOKEN: change-me-shared-secret
+      CAMERA_SOURCE: "0"
+      CAMERA_CODE: camera_01
+      SHOW_PREVIEW_WINDOW: "false" # niente finestra grafica dentro il container
+
+volumes:
+  pgdata:

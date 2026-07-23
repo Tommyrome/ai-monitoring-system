@@ -1,0 +1,258 @@
+:root {
+  --bg: #0a0d0b;
+  --panel-bg: #10140f;
+  --line: #1e2a1e;
+  --text: #d7e5d7;
+  --text-dim: #6f8a70;
+  --phosphor: #39ff88;
+  --phosphor-dim: #1f8a4d;
+  --amber: #ffb020;
+  --red: #ff4d4d;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+}
+
+/* Signature element: subtle scanline sweep across the whole viewport,
+   evoking an old CRT security monitor without being a cliché "hacker" theme. */
+.scanline-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(57, 255, 136, 0.03) 50%,
+    transparent 100%
+  );
+  background-size: 100% 6px;
+  animation: scan 6s linear infinite;
+  mix-blend-mode: screen;
+}
+@keyframes scan {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 300px; }
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #0d110d, #0a0d0b);
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  color: var(--phosphor);
+  font-size: 22px;
+  text-shadow: 0 0 8px rgba(57,255,136,0.6);
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+.brand-title {
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-size: 15px;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
+.conn-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+}
+.dot.online {
+  background: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.login-box { display: flex; gap: 6px; }
+.login-box input {
+  background: #0d120d;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: var(--font-mono);
+  padding: 6px 10px;
+  font-size: 12px;
+  width: 100px;
+}
+.login-box button {
+  background: var(--phosphor-dim);
+  color: #05130a;
+  border: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.login-box button:hover { background: var(--phosphor); }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+  padding: 22px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 16px 18px;
+}
+
+.panel-title {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin: 0 0 14px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.count-badge {
+  background: rgba(57,255,136,0.1);
+  color: var(--phosphor);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.live-tag {
+  color: var(--red);
+  font-size: 10px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.cameras-panel { grid-column: 1; grid-row: 1; }
+.stats-panel { grid-column: 2; grid-row: 1 / span 2; }
+.log-panel { grid-column: 1; grid-row: 2; }
+
+.camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.camera-tile {
+  border: 1px solid var(--line);
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
+  background: #0c100c;
+}
+.camera-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    transparent, transparent 3px, rgba(57,255,136,0.02) 4px
+  );
+}
+.camera-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.camera-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.camera-people {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--phosphor);
+}
+.camera-status-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; letter-spacing: 1px; color: var(--text-dim);
+}
+
+.stat-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.stat-card {
+  flex: 1;
+  border: 1px solid var(--line);
+  padding: 12px;
+  text-align: center;
+}
+.stat-value { display: block; font-size: 24px; font-weight: 700; color: var(--phosphor); }
+.stat-warning .stat-value { color: var(--amber); }
+.stat-critical .stat-value { color: var(--red); }
+.stat-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+
+.event-log {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.log-empty { color: var(--text-dim); padding: 20px 0; text-align: center; }
+
+.log-entry {
+  display: grid;
+  grid-template-columns: 70px 90px 1fr 60px;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.log-entry .time { color: var(--text-dim); }
+.log-entry .severity {
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 10px;
+}
+.severity.info { color: var(--phosphor); }
+.severity.warning { color: var(--amber); }
+.severity.critical { color: var(--red); }
+.log-entry .conf { text-align: right; color: var(--text-dim); }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: var(--line); }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; }
+  .cameras-panel, .stats-panel, .log-panel { grid-column: 1; }
+  .stats-panel { grid-row: auto; }
+}
