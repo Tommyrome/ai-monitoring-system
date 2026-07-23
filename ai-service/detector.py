@@ -16,7 +16,7 @@ Esegui con:  python detector.py
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import cv2
 from ultralytics import YOLO
@@ -100,7 +100,7 @@ def main():
             # conteggio persone per zona (per l'overcrowding check)
             people_per_zone = {z.name: 0 for z in zones}
 
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             out_of_hours = anomaly_detector.check_out_of_hours(now)
 
             for track_id, (centroid, bbox) in tracked.items():
