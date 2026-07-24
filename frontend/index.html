@@ -17,7 +17,7 @@
     <span class="brand-mark">◈</span>
     <div class="brand-text">
       <span class="brand-title">AI CAMERA MONITORING</span>
-      <span class="brand-sub">sistema di analisi intelligente degli ambienti</span>
+      <span class="brand-sub">sistema di analisi intelligente</span>
     </div>
   </div>
 
@@ -36,10 +36,8 @@
 <main class="grid">
 
   <section class="panel cameras-panel">
-    <h2 class="panel-title">TELECAMERE <span class="count-badge" id="camera-count">0</span></h2>
-    <div class="camera-grid" id="camera-grid">
-      <!-- popolato via JS -->
-    </div>
+    <h2 class="panel-title">TELECAMERE <span class="count-badge" id="camera-count">1</span></h2>
+    <div class="camera-grid" id="camera-grid"></div>
   </section>
 
   <section class="panel stats-panel">
@@ -59,12 +57,18 @@
       </div>
     </div>
     <canvas id="events-chart" height="140"></canvas>
+
+    <!-- NUOVA SEZIONE: LISTA PERSONE UNIVOCHE -->
+    <h2 class="panel-title" style="margin-top: 25px;">PERSONE RILEVATE</h2>
+    <div class="persons-list" id="persons-list">
+      <!-- Popolato via JS -->
+    </div>
   </section>
 
   <section class="panel log-panel">
     <h2 class="panel-title">EVENT LOG <span class="live-tag">● LIVE</span></h2>
     <div class="event-log" id="event-log">
-      <div class="log-empty">In attesa di eventi dal sistema di rilevamento...</div>
+      <div class="log-empty">In attesa di eventi...</div>
     </div>
   </section>
 

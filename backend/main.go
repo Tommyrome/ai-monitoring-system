@@ -33,6 +33,7 @@ func main() {
 	eventsHandler := handlers.NewEventsHandler(db, hub)
 	camerasHandler := handlers.NewCamerasHandler(db)
 	authHandler := handlers.NewAuthHandler(db)
+	personsHandler := handlers.NewPersonsHandler(db) // ← AGGIUNTO
 
 	router := gin.Default()
 	router.Use(corsMiddleware())
@@ -41,7 +42,6 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// WebSocket per aggiornamenti live della dashboard
 	router.GET("/ws", func(c *gin.Context) {
 		hub.ServeWS(c.Writer, c.Request)
 	})
@@ -50,17 +50,17 @@ func main() {
 	{
 		auth := api.Group("/auth")
 		auth.POST("/login", authHandler.Login)
-		auth.POST("/register", authHandler.Register) // solo per bootstrap in demo
+		auth.POST("/register", authHandler.Register)
 
-		// endpoint chiamato dal modulo Python: protetto da service token, non da JWT utente
 		api.POST("/events", middleware.RequireServiceToken(), eventsHandler.CreateEvent)
 
-		// endpoint di lettura per la dashboard: protetti da JWT utente
 		protected := api.Group("")
 		protected.Use(middleware.RequireJWT())
 		{
 			protected.GET("/events", eventsHandler.ListEvents)
 			protected.GET("/cameras", camerasHandler.ListCameras)
+			protected.GET("/persons", personsHandler.ListPersons)          // ← AGGIUNTO
+			protected.PATCH("/persons/:id", personsHandler.ToggleCritical) // ← AGGIUNTO
 		}
 	}
 

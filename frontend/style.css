@@ -256,3 +256,65 @@ html, body {
   .cameras-panel, .stats-panel, .log-panel { grid-column: 1; }
   .stats-panel { grid-row: auto; }
 }
+
+/* ====================== LISTA PERSONE ====================== */
+
+.persons-list {
+    max-height: 320px;
+    overflow-y: auto;
+    margin-top: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+}
+
+.person-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #0c100c;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.person-item span:first-child {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.person-item label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.person-item input[type="checkbox"] {
+    accent-color: var(--red);
+    width: 16px;
+    height: 16px;
+}
+
+/* Scrollbar per la lista persone */
+.persons-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.persons-list::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 3px;
+}
+
+/* Stato critico evidenziato */
+.person-item:has(input:checked) {
+    border-color: var(--red);
+    background: rgba(255, 77, 77, 0.08);
+}
+
+.person-item:has(input:checked) span:first-child {
+    color: var(--red);
+}

@@ -5,18 +5,16 @@ let authToken = null;
 let ws = null;
 let chart = null;
 
-const cameraCounts = {}; // codice_camera -> persone attualmente presenti (stima da eventi recenti)
 const dailyStats = { info: 0, warning: 0, critical: 0 };
+let knownPersons = [];
+const cameraCounts = {};
 
-// ---------------------------------------------------------------
 // AUTH
-// ---------------------------------------------------------------
 document.getElementById("login-btn").addEventListener("click", login);
 
 async function login() {
   const username = document.getElementById("username").value;
   const password = document.getElementById("password").value;
-
   try {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: "POST",
@@ -33,71 +31,59 @@ async function login() {
   }
 }
 
-// ---------------------------------------------------------------
-// DASHBOARD INIT
-// ---------------------------------------------------------------
+// DASHBOARD
 async function initDashboard() {
   await loadCameras();
   await loadEvents();
+  await loadKnownPersons();
   connectWebSocket();
   setupChart();
 }
 
-async function loadCameras() {
+async function loadKnownPersons() {
   try {
-    const res = await fetch(`${API_BASE}/api/cameras`, {
+    const res = await fetch(`${API_BASE}/api/persons`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
-    const cameras = await res.json();
-    renderCameras(cameras);
+    knownPersons = await res.json();
+    renderKnownPersons();
   } catch (e) {
-    console.error("errore caricamento telecamere", e);
+    console.error("Errore caricamento persons", e);
   }
 }
 
-async function loadEvents() {
+function renderKnownPersons() {
+  const container = document.getElementById("persons-list");
+  container.innerHTML = "";
+  knownPersons.forEach(person => {
+    const div = document.createElement("div");
+    div.className = "person-item";
+    div.innerHTML = `
+      <span>${person.nome || 'Person_' + person.track_id}</span>
+      <label>
+        <input type="checkbox" ${person.is_critical ? 'checked' : ''} 
+               onchange="toggleCritical('${person.id}', this.checked)">
+        Critica
+      </label>
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function toggleCritical(personId, isCritical) {
   try {
-    const res = await fetch(`${API_BASE}/api/events?limit=50`, {
-      headers: { Authorization: `Bearer ${authToken}` },
+    await fetch(`${API_BASE}/api/persons/${personId}`, {
+      method: "PATCH",
+      headers: { 
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}` 
+      },
+      body: JSON.stringify({ is_critical: isCritical })
     });
-    const events = await res.json();
-    events.reverse().forEach(appendLogEntry);
-    events.forEach(tallyStat);
-    updateStatCards();
+    loadKnownPersons(); // refresh
   } catch (e) {
-    console.error("errore caricamento eventi", e);
+    console.error(e);
   }
-}
-
-// ---------------------------------------------------------------
-// WEBSOCKET (aggiornamenti in tempo reale)
-// ---------------------------------------------------------------
-function connectWebSocket() {
-  ws = new WebSocket(WS_URL);
-
-  ws.onopen = () => setConnLabel(true);
-  ws.onclose = () => {
-    setConnLabel(false);
-    setTimeout(connectWebSocket, 3000); // riconnessione automatica
-  };
-  ws.onerror = () => ws.close();
-
-  ws.onmessage = (msg) => {
-    const data = JSON.parse(msg.data);
-    if (data.type === "new_event") {
-      appendLogEntry(data.event);
-      tallyStat(data.event);
-      updateStatCards();
-      bumpCameraCount(data.event);
-    }
-  };
-}
-
-function setConnLabel(online) {
-  const dot = document.getElementById("conn-dot");
-  const label = document.getElementById("conn-label");
-  dot.classList.toggle("online", online);
-  label.textContent = online ? "SISTEMA ONLINE" : "RICONNESSIONE...";
 }
 
 // ---------------------------------------------------------------
@@ -213,4 +199,19 @@ function setupChart() {
 function updateChart() {
   chart.data.datasets[0].data = [dailyStats.info, dailyStats.warning, dailyStats.critical];
   chart.update();
+}
+
+async function loadEvents() {
+  try {
+    const res = await fetch(`${API_BASE}/api/events?limit=50`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const events = await res.json();
+    events.reverse().forEach(appendLogEntry);
+    events.forEach(tallyStat);
+    updateStatCards();
+  } catch (e) {
+    console.error("errore caricamento eventi", e);
+  }
+  loadKnownPersons(); // refresh dopo eventi
 }
