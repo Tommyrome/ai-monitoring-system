@@ -72,3 +72,5 @@ CREATE INDEX IF NOT EXISTS idx_persons_critical ON persons (is_critical);
 INSERT INTO cameras (codice, nome, posizione, stato)
 VALUES ('camera_01', 'Telecamera Principale', 'Ingresso', 'offline')
 ON CONFLICT (codice) DO NOTHING;
+
+
