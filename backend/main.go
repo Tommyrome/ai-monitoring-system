@@ -33,7 +33,8 @@ func main() {
 	eventsHandler := handlers.NewEventsHandler(db, hub)
 	camerasHandler := handlers.NewCamerasHandler(db)
 	authHandler := handlers.NewAuthHandler(db)
-	personsHandler := handlers.NewPersonsHandler(db) // ← AGGIUNTO
+	personsHandler := handlers.NewPersonsHandler(db)
+	frameHandler := handlers.NewFrameHandler(hub)
 
 	router := gin.Default()
 	router.Use(corsMiddleware())
@@ -53,14 +54,17 @@ func main() {
 		auth.POST("/register", authHandler.Register)
 
 		api.POST("/events", middleware.RequireServiceToken(), eventsHandler.CreateEvent)
+		api.POST("/frame", middleware.RequireServiceToken(), frameHandler.PostFrame)
 
 		protected := api.Group("")
 		protected.Use(middleware.RequireJWT())
 		{
 			protected.GET("/events", eventsHandler.ListEvents)
+			protected.GET("/stats", eventsHandler.GetStats)
 			protected.GET("/cameras", camerasHandler.ListCameras)
-			protected.GET("/persons", personsHandler.ListPersons)          // ← AGGIUNTO
-			protected.PATCH("/persons/:id", personsHandler.ToggleCritical) // ← AGGIUNTO
+			protected.GET("/frame", frameHandler.GetFrame)
+			protected.GET("/persons", personsHandler.ListPersons)
+			protected.PATCH("/persons/:id", personsHandler.UpdatePerson)
 		}
 	}
 

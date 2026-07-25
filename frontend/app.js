@@ -1,13 +1,14 @@
 const API_BASE = "http://localhost:8080";
 const WS_URL = "ws://localhost:8080/ws";
+const CAMERA_CODE = "camera_01";
 
 let authToken = null;
 let ws = null;
+let wsReconnectTimer = null;
 let chart = null;
 
-const dailyStats = { info: 0, warning: 0, critical: 0 };
+let stats = { total_events: 0, normal_events: 0, critical_events: 0 };
 let knownPersons = [];
-const cameraCounts = {};
 
 // AUTH
 document.getElementById("login-btn").addEventListener("click", login);
@@ -31,15 +32,119 @@ async function login() {
   }
 }
 
-// DASHBOARD
+// ---------------------------------------------------------------
+// DASHBOARD INIT
+// ---------------------------------------------------------------
 async function initDashboard() {
-  await loadCameras();
+  setupChart();
+  await loadStats();
   await loadEvents();
   await loadKnownPersons();
+  await loadInitialFrame();
   connectWebSocket();
-  setupChart();
 }
 
+// ---------------------------------------------------------------
+// WEBSOCKET (aggiornamenti in tempo reale: eventi, statistiche, frame)
+// ---------------------------------------------------------------
+function connectWebSocket() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    setConnLabel(true);
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+  };
+
+  ws.onmessage = (msg) => {
+    let payload;
+    try {
+      payload = JSON.parse(msg.data);
+    } catch (e) {
+      return;
+    }
+    handleWsMessage(payload);
+  };
+
+  ws.onclose = () => {
+    setConnLabel(false);
+    // riconnessione automatica
+    wsReconnectTimer = setTimeout(connectWebSocket, 2000);
+  };
+
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+function setConnLabel(online) {
+  const dot = document.getElementById("conn-dot");
+  const label = document.getElementById("conn-label");
+  dot.className = online ? "dot online" : "dot";
+  label.textContent = online ? "LIVE" : "RICONNESSIONE...";
+}
+
+function handleWsMessage(payload) {
+  switch (payload.type) {
+    case "new_event":
+      onNewEvent(payload.event);
+      break;
+    case "stats_update":
+      stats = payload.stats;
+      updateStatCards();
+      updateChart();
+      break;
+    case "frame":
+      if (payload.camera === CAMERA_CODE) renderFrame(payload.data);
+      break;
+    default:
+      break;
+  }
+}
+
+function onNewEvent(event) {
+  appendLogEntry(event);
+  setCameraOnline(true);
+  loadKnownPersons(); // aggiorna last_seen / eventuali nuove persone
+}
+
+// ---------------------------------------------------------------
+// FEED TELECAMERA
+// ---------------------------------------------------------------
+async function loadInitialFrame() {
+  try {
+    const res = await fetch(`${API_BASE}/api/frame?camera=${CAMERA_CODE}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) return; // nessun frame disponibile ancora, va bene
+    const data = await res.json();
+    renderFrame(data.data);
+  } catch (e) {
+    console.error("errore caricamento frame iniziale", e);
+  }
+}
+
+function renderFrame(base64Jpeg) {
+  const img = document.getElementById("camera-feed");
+  const placeholder = document.getElementById("feed-placeholder");
+  img.src = `data:image/jpeg;base64,${base64Jpeg}`;
+  img.style.display = "block";
+  placeholder.style.display = "none";
+  setCameraOnline(true);
+}
+
+function setCameraOnline(online) {
+  const dot = document.getElementById("camera-dot");
+  const label = document.getElementById("camera-status-label");
+  dot.className = online ? "dot online" : "dot";
+  label.textContent = online ? "ONLINE" : "OFFLINE";
+}
+
+// ---------------------------------------------------------------
+// PERSONE RILEVATE
+// ---------------------------------------------------------------
 async function loadKnownPersons() {
   try {
     const res = await fetch(`${API_BASE}/api/persons`, {
@@ -54,75 +159,83 @@ async function loadKnownPersons() {
 
 function renderKnownPersons() {
   const container = document.getElementById("persons-list");
+  document.getElementById("persons-count").textContent = knownPersons.length;
+
+  if (knownPersons.length === 0) {
+    container.innerHTML = `<div class="log-empty">Nessuna persona rilevata finora...</div>`;
+    return;
+  }
+
   container.innerHTML = "";
-  knownPersons.forEach(person => {
+  knownPersons.forEach((person) => {
     const div = document.createElement("div");
     div.className = "person-item";
     div.innerHTML = `
-      <span>${person.nome || 'Person_' + person.track_id}</span>
-      <label>
-        <input type="checkbox" ${person.is_critical ? 'checked' : ''} 
+      <div class="person-row">
+        <input type="text" class="person-name-input" value="${escapeHtml(person.nome)}" data-id="${person.id}">
+        <button class="rename-btn" data-id="${person.id}">Salva</button>
+      </div>
+      <label class="critical-toggle">
+        <input type="checkbox" ${person.is_critical ? "checked" : ""}
                onchange="toggleCritical('${person.id}', this.checked)">
-        Critica
+        Persona critica
       </label>
     `;
     container.appendChild(div);
   });
+
+  container.querySelectorAll(".rename-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      const input = container.querySelector(`.person-name-input[data-id="${id}"]`);
+      renamePerson(id, input.value);
+    });
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
+async function renamePerson(personId, nome) {
+  nome = (nome || "").trim();
+  if (!nome) return;
+  try {
+    await fetch(`${API_BASE}/api/persons/${personId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ nome }),
+    });
+    loadKnownPersons();
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 async function toggleCritical(personId, isCritical) {
   try {
     await fetch(`${API_BASE}/api/persons/${personId}`, {
       method: "PATCH",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}` 
+        Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ is_critical: isCritical })
+      body: JSON.stringify({ is_critical: isCritical }),
     });
-    loadKnownPersons(); // refresh
+    loadKnownPersons();
   } catch (e) {
     console.error(e);
   }
 }
 
 // ---------------------------------------------------------------
-// RENDERING
+// EVENT LOG
 // ---------------------------------------------------------------
-function renderCameras(cameras) {
-  const grid = document.getElementById("camera-grid");
-  grid.innerHTML = "";
-  document.getElementById("camera-count").textContent = cameras.length;
-
-  cameras.forEach((cam) => {
-    cameraCounts[cam.id] = cameraCounts[cam.id] || 0;
-    const tile = document.createElement("div");
-    tile.className = "camera-tile";
-    tile.id = `camera-${cam.id}`;
-    tile.innerHTML = `
-      <div class="camera-status-row">
-        <span class="dot ${cam.stato === "online" ? "online" : ""}"></span>
-        <span>${cam.stato.toUpperCase()}</span>
-      </div>
-      <div class="camera-name">${cam.nome}</div>
-      <div class="camera-people">${cameraCounts[cam.id]}</div>
-      <div class="camera-meta">
-        <span>${cam.posizione || "-"}</span>
-        <span>persone</span>
-      </div>
-    `;
-    grid.appendChild(tile);
-  });
-}
-
-function bumpCameraCount(event) {
-  const tile = document.getElementById(`camera-${event.camera_id}`);
-  if (!tile) return; // telecamera non ancora nella lista locale, verra' aggiornata al prossimo refresh
-  const el = tile.querySelector(".camera-people");
-  const current = parseInt(el.textContent, 10) || 0;
-  el.textContent = current + 1;
-}
-
 function appendLogEntry(event) {
   const log = document.getElementById("event-log");
   const empty = log.querySelector(".log-empty");
@@ -132,10 +245,11 @@ function appendLogEntry(event) {
   entry.className = "log-entry";
   const time = new Date(event.timestamp).toLocaleTimeString("it-IT");
   const confidencePct = Math.round((event.confidence || 0) * 100);
+  const tipo = (event.tipo_evento || "NORMAL").toUpperCase();
 
   entry.innerHTML = `
     <span class="time">${time}</span>
-    <span class="severity ${event.severity}">${event.severity.toUpperCase()}</span>
+    <span class="tipo ${tipo.toLowerCase()}">${tipo}</span>
     <span>${describeEvent(event)}</span>
     <span class="conf">${confidencePct}%</span>
   `;
@@ -146,42 +260,47 @@ function appendLogEntry(event) {
 }
 
 function describeEvent(event) {
-  switch (event.tipo_evento) {
-    case "person_detected":
-      return `Persona rilevata${event.camera_nome ? " — " + event.camera_nome : ""}`;
-    case "zone_alert":
-      return `Accesso non autorizzato${event.zone ? " (" + event.zone + ")" : ""}`;
-    case "anomaly":
-      return `Anomalia rilevata${event.zone ? " (" + event.zone + ")" : ""}`;
-    default:
-      return event.tipo_evento;
+  const nome = event.person_nome || (event.track_id ? `Persona ${event.track_id}` : "Persona");
+  if (event.tipo_evento === "CRITICAL") {
+    return `⚠ Rilevata persona critica: ${nome}`;
   }
-}
-
-function tallyStat(event) {
-  if (dailyStats[event.severity] !== undefined) dailyStats[event.severity]++;
-  if (chart) updateChart();
-}
-
-function updateStatCards() {
-  const total = dailyStats.info + dailyStats.warning + dailyStats.critical;
-  document.getElementById("stat-total").textContent = total;
-  document.getElementById("stat-warning").textContent = dailyStats.warning;
-  document.getElementById("stat-critical").textContent = dailyStats.critical;
+  return `Persona rilevata: ${nome}`;
 }
 
 // ---------------------------------------------------------------
-// CHART (distribuzione eventi per severity)
+// STATISTICHE
+// ---------------------------------------------------------------
+async function loadStats() {
+  try {
+    const res = await fetch(`${API_BASE}/api/stats`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    stats = await res.json();
+    updateStatCards();
+    updateChart();
+  } catch (e) {
+    console.error("errore caricamento statistiche", e);
+  }
+}
+
+function updateStatCards() {
+  document.getElementById("stat-total").textContent = stats.total_events;
+  document.getElementById("stat-normal").textContent = stats.normal_events;
+  document.getElementById("stat-critical").textContent = stats.critical_events;
+}
+
+// ---------------------------------------------------------------
+// CHART (distribuzione eventi normali / critici)
 // ---------------------------------------------------------------
 function setupChart() {
   const ctx = document.getElementById("events-chart").getContext("2d");
   chart = new Chart(ctx, {
     type: "bar",
     data: {
-      labels: ["INFO", "WARNING", "CRITICAL"],
+      labels: ["NORMALI", "CRITICI"],
       datasets: [{
-        data: [dailyStats.info, dailyStats.warning, dailyStats.critical],
-        backgroundColor: ["#39ff88", "#ffb020", "#ff4d4d"],
+        data: [stats.normal_events, stats.critical_events],
+        backgroundColor: ["#39ff88", "#ff4d4d"],
         borderRadius: 2,
       }],
     },
@@ -197,7 +316,8 @@ function setupChart() {
 }
 
 function updateChart() {
-  chart.data.datasets[0].data = [dailyStats.info, dailyStats.warning, dailyStats.critical];
+  if (!chart) return;
+  chart.data.datasets[0].data = [stats.normal_events, stats.critical_events];
   chart.update();
 }
 
@@ -208,10 +328,8 @@ async function loadEvents() {
     });
     const events = await res.json();
     events.reverse().forEach(appendLogEntry);
-    events.forEach(tallyStat);
-    updateStatCards();
+    if (events.length > 0) setCameraOnline(true);
   } catch (e) {
     console.error("errore caricamento eventi", e);
   }
-  loadKnownPersons(); // refresh dopo eventi
 }

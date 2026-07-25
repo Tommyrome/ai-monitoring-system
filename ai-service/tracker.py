@@ -24,8 +24,11 @@ import numpy as np
 
 
 class CentroidTracker:
-    def __init__(self, max_disappeared=30, max_distance=80):
-        self.next_object_id = 0
+    def __init__(self, max_disappeared=30, max_distance=80, start_id=0):
+        # start_id permette di continuare la numerazione da dove l'ultima
+        # sessione era arrivata (vedi detector.py), per non riassegnare
+        # subito un track_id gia' presente in database a una persona diversa.
+        self.next_object_id = start_id
         self.objects = OrderedDict()       # object_id -> centroid (x, y)
         self.bboxes = OrderedDict()        # object_id -> (x1, y1, x2, y2)
         self.disappeared = OrderedDict()   # object_id -> frame count assente

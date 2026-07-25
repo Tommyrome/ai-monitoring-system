@@ -6,6 +6,7 @@ load_dotenv()
 # --- Backend ---
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080")
 EVENTS_ENDPOINT = f"{BACKEND_URL}/api/events"
+FRAME_ENDPOINT = f"{BACKEND_URL}/api/frame"
 API_TOKEN = os.getenv("AI_SERVICE_TOKEN", "change-me-shared-secret")
 
 # --- Camera ---
@@ -19,15 +20,15 @@ PERSON_CLASS_ID = 0
 
 # --- Frame processing ---
 PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "2"))
-SEND_MIN_INTERVAL_SECONDS = float(os.getenv("SEND_MIN_INTERVAL_SECONDS", "1.5"))  # throttling più conservativo
+NEW_APPEARANCE_GAP_SECONDS = float(os.getenv("NEW_APPEARANCE_GAP_SECONDS", "3.0"))
 
-# --- Zone ---
-ZONES_CONFIG = []  # Rimosse tutte le zone vietate
+# --- Streaming del feed verso la dashboard ---
+FRAME_STREAM_MIN_INTERVAL = float(os.getenv("FRAME_STREAM_MIN_INTERVAL", "0.15"))  # ~6-7 fps
+FRAME_JPEG_QUALITY = int(os.getenv("FRAME_JPEG_QUALITY", "70"))
 
-# --- Anomaly detection (solo orari e overcrowding) ---
-ALLOWED_HOUR_START = "06:00"
-ALLOWED_HOUR_END = "22:00"
-MAX_PEOPLE_PER_ZONE = 5
-MAX_DWELL_SECONDS = 300
+# --- Persone note: ogni quanto ricaricare nome/is_critical dal backend,
+#     cosi' una rinomina o un cambio di stato "critica" fatti dalla
+#     dashboard vengono recepiti senza riavviare il modulo AI ---
+KNOWN_PERSONS_REFRESH_SECONDS = float(os.getenv("KNOWN_PERSONS_REFRESH_SECONDS", "5.0"))
 
 SHOW_PREVIEW_WINDOW = os.getenv("SHOW_PREVIEW_WINDOW", "true").lower() == "true"

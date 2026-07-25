@@ -1,30 +1,33 @@
 # AI Camera Monitoring System
 
-Sistema di monitoraggio intelligente basato su Computer Vision.
+Sistema di monitoraggio intelligente con una singola telecamera, basato
+su Computer Vision.
 
-Rileva automaticamente la presenza di persone tramite webcam, genera eventi
-strutturati (rilevamento, accesso a zona vietata, anomalie) e li mostra in
-tempo reale su una dashboard web — senza fare riconoscimento facciale: le
-persone restano anonime, il sistema traccia solo "un oggetto di tipo person"
-con un ID temporaneo.
+Rileva automaticamente le persone tramite webcam, le riconosce nel tempo
+tramite un identificativo persistente (tracking per centroide — non
+riconoscimento facciale), permette di rinominarle e di contrassegnarle
+come "critiche". Ogni evento generato viene classificato come `NORMAL`
+o `CRITICAL` in base allo stato della persona, mostrato in tempo reale
+su una dashboard web insieme al feed della telecamera, alle statistiche
+e al log eventi.
 
 ## Architettura
 
 ```
-┌──────────────────┐      HTTP POST /api/events      ┌──────────────────┐
+┌──────────────────┐   POST /api/events, /api/frame   ┌──────────────────┐
 │   AI SERVICE      │ ───────────────────────────────▶│     BACKEND       │
 │   (Python)        │                                  │     (Go)          │
 │                    │                                  │                    │
-│ OpenCV + YOLOv8    │                                  │ Gin REST API       │
-│ CentroidTracker    │                                  │ PostgreSQL         │
-│ Zone / Anomaly     │                                  │ WebSocket Hub      │
-└──────────────────┘                                  └────────┬─────────┘
+│ OpenCV + YOLOv8    │◀──── GET /api/persons ──────────│ Gin REST API       │
+│ CentroidTracker    │      (cache locale nome/critica) │ PostgreSQL         │
+└──────────────────┘                                  │ WebSocket Hub      │
+                                                        └────────┬─────────┘
                                                                   │ WebSocket
-                                                                  │ (broadcast)
+                                                                  │ (eventi, statistiche, frame)
                                                         ┌─────────▼─────────┐
                                                         │   DASHBOARD        │
                                                         │   (HTML/CSS/JS)    │
-                                                        │   fetch + WS live  │
+                                                        │   feed + log + stat│
                                                         └────────────────────┘
 ```
 
@@ -32,18 +35,24 @@ Tre servizi indipendenti, containerizzati separatamente:
 
 | Servizio      | Linguaggio | Responsabilità |
 |---------------|-----------|----------------|
-| `ai-service`  | Python     | Cattura video, object detection, tracking, invio eventi |
-| `backend`     | Go         | API REST, autenticazione JWT, persistenza, WebSocket |
-| `frontend`    | HTML/CSS/JS| Dashboard live: telecamere, log eventi, statistiche |
+| `ai-service`  | Python     | Cattura video, object detection, tracking, invio eventi e frame |
+| `backend`     | Go         | API REST, autenticazione JWT, riconoscimento/persistenza persone, WebSocket |
+| `frontend`    | HTML/CSS/JS| Dashboard live: feed telecamera, log eventi, statistiche, persone |
+
+Il backend è l'unica fonte di verità su nome e stato "critica" di ogni
+persona: quando arriva un evento, risolve (o crea) la persona dal
+`track_id` e decide se l'evento è `NORMAL` o `CRITICAL` leggendo lo
+stato attuale dal database — così una rinomina o un cambio di stato
+fatti dalla dashboard hanno effetto immediato, senza riavviare il
+modulo AI.
 
 ## Struttura del progetto
 
 ```
 ai-monitoring-system/
 ├── ai-service/          # Python: OpenCV + YOLO + tracking
-│   ├── detector.py       # loop principale
+│   ├── detector.py       # loop principale + streaming frame
 │   ├── tracker.py        # CentroidTracker
-│   ├── zones.py          # zone monitoring + anomaly detection
 │   ├── event_client.py   # invio eventi HTTP al backend
 │   ├── config.py
 │   ├── requirements.txt
@@ -51,7 +60,7 @@ ai-monitoring-system/
 ├── backend/              # Go: API REST + WebSocket
 │   ├── main.go
 │   ├── db.go
-│   ├── handlers/          (events, cameras, auth)
+│   ├── handlers/          (events, persons, frame, cameras, auth)
 │   ├── middleware/         (JWT + service token)
 │   ├── ws/                 (hub WebSocket)
 │   ├── models/
@@ -62,7 +71,7 @@ ai-monitoring-system/
 │   ├── style.css
 │   └── app.js
 ├── db/
-│   └── schema.sql         # tabelle users, cameras, zones, events
+│   └── schema.sql         # tabelle users, cameras, persons, events
 ├── docker-compose.yml
 └── README.md
 ```
@@ -115,8 +124,22 @@ python -m http.server 5500
 ```
 
 Poi vai su `http://localhost:5500`, accedi con `admin / admin123` e vedrai
-gli eventi arrivare in tempo reale non appena il modulo AI rileva una
-persona davanti alla webcam.
+il feed della telecamera, gli eventi e le persone rilevate aggiornarsi in
+tempo reale non appena il modulo AI rileva qualcuno davanti alla webcam.
+
+## API principali
+
+| Metodo | Endpoint | Autenticazione | Descrizione |
+|---|---|---|---|
+| `POST` | `/api/auth/register` / `/api/auth/login` | — | crea utente / ottiene un JWT |
+| `POST` | `/api/events` | service token | riceve un rilevamento dal modulo AI, risolve la persona e classifica l'evento |
+| `POST` | `/api/frame` | service token | riceve un frame JPEG (base64) dal modulo AI e lo ridistribuisce via WebSocket |
+| `GET` | `/api/events` | JWT | elenco log eventi (filtro opzionale `?tipo=CRITICAL`) |
+| `GET` | `/api/stats` | JWT | conteggio eventi totali / normali / critici |
+| `GET` | `/api/persons` | JWT | elenco persone note |
+| `PATCH` | `/api/persons/:id` | JWT | rinomina e/o imposta lo stato "critica" (`{"nome": "...", "is_critical": true}`) |
+| `GET` | `/api/frame` | JWT | ultimo frame disponibile (usato al primo caricamento) |
+| `GET` | `/ws` | — | canale WebSocket: messaggi `new_event`, `stats_update`, `frame` |
 
 ## Variabili d'ambiente principali
 
@@ -124,7 +147,10 @@ persona davanti alla webcam.
 |---|---|---|
 | `DATABASE_URL` | backend | connection string PostgreSQL |
 | `JWT_SECRET` | backend | chiave di firma dei JWT utente |
-| `AI_SERVICE_TOKEN` | backend + ai-service | token condiviso per l'endpoint `POST /api/events` |
+| `AI_SERVICE_TOKEN` | backend + ai-service | token condiviso per gli endpoint `POST /api/events` e `POST /api/frame` |
 | `BACKEND_URL` | ai-service | URL del backend Go |
 | `CAMERA_SOURCE` | ai-service | `0` per la webcam di default, oppure path/URL RTSP |
 | `CONFIDENCE_THRESHOLD` | ai-service | soglia minima di confidenza YOLO (default 0.5) |
+| `KNOWN_PERSONS_REFRESH_SECONDS` | ai-service | ogni quanto ricaricare nome/stato critica dal backend (default 5s) |
+| `FRAME_STREAM_MIN_INTERVAL` | ai-service | intervallo minimo tra due frame inviati alla dashboard (default 0.15s) |
+| `FRAME_JPEG_QUALITY` | ai-service | qualità JPEG del feed inviato alla dashboard (default 70) |

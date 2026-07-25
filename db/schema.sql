@@ -24,16 +24,6 @@ CREATE TABLE IF NOT EXISTS cameras (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ZONES (lasciato ma non più usato)
-CREATE TABLE IF NOT EXISTS zones (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    camera_id   UUID NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-    nome        VARCHAR(128) NOT NULL,
-    tipo        VARCHAR(32) NOT NULL DEFAULT 'restricted',
-    poligono    JSONB NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 -- PERSONS - Nuova tabella per persone univoche e critiche
 CREATE TABLE IF NOT EXISTS persons (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -47,14 +37,16 @@ CREATE TABLE IF NOT EXISTS persons (
 );
 
 -- EVENTS
+-- tipo_evento e' sempre NORMAL o CRITICAL: e' il backend a deciderlo in base
+-- allo stato is_critical della persona riconosciuta al momento dell'evento
+-- (unica fonte di verita', cosi' un cambio di stato si riflette subito).
 CREATE TABLE IF NOT EXISTS events (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     camera_id   UUID NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-    person_id   UUID REFERENCES persons(id) ON DELETE SET NULL,  -- link opzionale
-    tipo_evento VARCHAR(32) NOT NULL,
-    severity    VARCHAR(16) NOT NULL DEFAULT 'info',
+    person_id   UUID REFERENCES persons(id) ON DELETE SET NULL,
+    tipo_evento VARCHAR(16) NOT NULL CHECK (tipo_evento IN ('NORMAL', 'CRITICAL')),
     track_id    VARCHAR(64),
-    confidence  NUMERIC(4,3) NOT NULL,
+    confidence  NUMERIC(4,3),
     bbox_x      NUMERIC,
     bbox_y      NUMERIC,
     bbox_w      NUMERIC,
@@ -65,8 +57,10 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_camera_ts ON events (camera_id, "timestamp" DESC);
-CREATE INDEX IF NOT EXISTS idx_events_severity ON events (severity);
+CREATE INDEX IF NOT EXISTS idx_events_tipo ON events (tipo_evento);
+CREATE INDEX IF NOT EXISTS idx_events_person ON events (person_id);
 CREATE INDEX IF NOT EXISTS idx_persons_critical ON persons (is_critical);
+CREATE INDEX IF NOT EXISTS idx_persons_track_id ON persons (track_id);
 
 -- SEED (solo 1 camera)
 INSERT INTO cameras (codice, nome, posizione, stato)

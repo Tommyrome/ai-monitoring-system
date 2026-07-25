@@ -3,6 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"aicam-backend/models"
 
@@ -29,7 +31,7 @@ func (h *PersonsHandler) ListPersons(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var persons []models.Person
+	persons := make([]models.Person, 0)
 	for rows.Next() {
 		var p models.Person
 		if err := rows.Scan(&p.ID, &p.TrackID, &p.Nome, &p.IsCritical, &p.FirstSeen, &p.LastSeen); err != nil {
@@ -40,27 +42,62 @@ func (h *PersonsHandler) ListPersons(c *gin.Context) {
 	c.JSON(http.StatusOK, persons)
 }
 
-// ToggleCritical - PATCH /api/persons/:id
-func (h *PersonsHandler) ToggleCritical(c *gin.Context) {
+type updatePersonInput struct {
+	Nome       *string `json:"nome"`
+	IsCritical *bool   `json:"is_critical"`
+}
+
+// UpdatePerson - PATCH /api/persons/:id
+// Supporta l'aggiornamento parziale: rinomina la persona, imposta lo
+// stato "critica", o entrambi in un'unica richiesta.
+func (h *PersonsHandler) UpdatePerson(c *gin.Context) {
 	id := c.Param("id")
-	var input struct {
-		IsCritical bool `json:"is_critical"`
-	}
+	var input updatePersonInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	_, err := h.DB.Exec(`
-		UPDATE persons 
-		SET is_critical = $1, last_seen = now() 
-		WHERE id = $2`, input.IsCritical, id)
+	if input.Nome == nil && input.IsCritical == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "specificare almeno nome o is_critical"})
+		return
+	}
 
+	if input.Nome != nil && strings.TrimSpace(*input.Nome) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "il nome non puo' essere vuoto"})
+		return
+	}
+
+	setClauses := []string{}
+	args := []interface{}{}
+	argN := 1
+
+	if input.Nome != nil {
+		setClauses = append(setClauses, "nome = $"+strconv.Itoa(argN))
+		args = append(args, strings.TrimSpace(*input.Nome))
+		argN++
+	}
+	if input.IsCritical != nil {
+		setClauses = append(setClauses, "is_critical = $"+strconv.Itoa(argN))
+		args = append(args, *input.IsCritical)
+		argN++
+	}
+
+	query := "UPDATE persons SET " + strings.Join(setClauses, ", ") + " WHERE id = $" + strconv.Itoa(argN) +
+		" RETURNING id, track_id, nome, is_critical, first_seen, last_seen"
+	args = append(args, id)
+
+	var p models.Person
+	err := h.DB.QueryRow(query, args...).Scan(&p.ID, &p.TrackID, &p.Nome, &p.IsCritical, &p.FirstSeen, &p.LastSeen)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "persona non trovata"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+	c.JSON(http.StatusOK, p)
 }
