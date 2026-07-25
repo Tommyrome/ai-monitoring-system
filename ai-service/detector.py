@@ -45,17 +45,25 @@ last_appearance = {}
 
 
 def load_known_persons():
-    """Ricarica la cache locale di persone note dal backend."""
+    """Ricarica la cache locale di persone note dal backend.
+    Usa l'endpoint /api/internal/persons, protetto dal token di servizio
+    (il modulo AI non fa login utente, quindi non ha un JWT)."""
     try:
-        resp = requests.get(f"{config.BACKEND_URL}/api/persons", timeout=3.0)
+        resp = requests.get(
+            f"{config.BACKEND_URL}/api/internal/persons",
+            headers={"Authorization": f"Bearer {config.API_TOKEN}"},
+            timeout=3.0,
+        )
         if resp.ok:
             fresh = {p["track_id"]: p for p in resp.json()}
             with _known_persons_lock:
                 KNOWN_PERSONS.clear()
                 KNOWN_PERSONS.update(fresh)
             logger.info(f"Cache persone aggiornata: {len(fresh)} persone note")
-    except requests.RequestException:
-        logger.warning("Impossibile ricaricare le persone note dal backend")
+        else:
+            logger.warning(f"Backend ha rifiutato la richiesta persone ({resp.status_code}): {resp.text}")
+    except requests.RequestException as e:
+        logger.warning(f"Impossibile ricaricare le persone note dal backend: {e}")
 
 
 def known_persons_refresh_loop():

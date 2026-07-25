@@ -55,6 +55,9 @@ func main() {
 
 		api.POST("/events", middleware.RequireServiceToken(), eventsHandler.CreateEvent)
 		api.POST("/frame", middleware.RequireServiceToken(), frameHandler.PostFrame)
+		// il modulo AI non ha un login utente (solo il token di servizio),
+		// quindi legge la lista persone da qui invece che da /api/persons
+		api.GET("/internal/persons", middleware.RequireServiceToken(), personsHandler.ListPersons)
 
 		protected := api.Group("")
 		protected.Use(middleware.RequireJWT())
