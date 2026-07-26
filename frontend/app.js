@@ -36,12 +36,31 @@ async function login() {
 // DASHBOARD INIT
 // ---------------------------------------------------------------
 async function initDashboard() {
-  setupChart();
-  await loadStats();
-  await loadEvents();
-  await loadKnownPersons();
-  await loadInitialFrame();
-  connectWebSocket();
+  // Ogni passo e' isolato: se uno fallisce (es. Chart.js non si carica dal
+  // CDN), gli altri devono comunque partire - in particolare la
+  // connessione WebSocket, che e' quella che tiene viva la dashboard.
+  safeRun("setupChart", setupChart);
+  await safeRunAsync("loadStats", loadStats);
+  await safeRunAsync("loadEvents", loadEvents);
+  await safeRunAsync("loadKnownPersons", loadKnownPersons);
+  await safeRunAsync("loadInitialFrame", loadInitialFrame);
+  safeRun("connectWebSocket", connectWebSocket);
+}
+
+function safeRun(label, fn) {
+  try {
+    fn();
+  } catch (e) {
+    console.error(`Errore in ${label}:`, e);
+  }
+}
+
+async function safeRunAsync(label, fn) {
+  try {
+    await fn();
+  } catch (e) {
+    console.error(`Errore in ${label}:`, e);
+  }
 }
 
 // ---------------------------------------------------------------
@@ -203,7 +222,7 @@ async function renamePerson(personId, nome) {
   nome = (nome || "").trim();
   if (!nome) return;
   try {
-    await fetch(`${API_BASE}/api/persons/${personId}`, {
+    const res = await fetch(`${API_BASE}/api/persons/${personId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -211,15 +230,20 @@ async function renamePerson(personId, nome) {
       },
       body: JSON.stringify({ nome }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
     loadKnownPersons();
   } catch (e) {
-    console.error(e);
+    console.error("Errore rinomina persona:", e);
+    alert("Rinomina fallita: " + e.message);
   }
 }
 
 async function toggleCritical(personId, isCritical) {
   try {
-    await fetch(`${API_BASE}/api/persons/${personId}`, {
+    const res = await fetch(`${API_BASE}/api/persons/${personId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -227,9 +251,14 @@ async function toggleCritical(personId, isCritical) {
       },
       body: JSON.stringify({ is_critical: isCritical }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
     loadKnownPersons();
   } catch (e) {
-    console.error(e);
+    console.error("Errore aggiornamento stato critico:", e);
+    alert("Aggiornamento fallito: " + e.message);
   }
 }
 
@@ -293,7 +322,13 @@ function updateStatCards() {
 // CHART (distribuzione eventi normali / critici)
 // ---------------------------------------------------------------
 function setupChart() {
-  const ctx = document.getElementById("events-chart").getContext("2d");
+  const canvas = document.getElementById("events-chart");
+  if (typeof Chart === "undefined") {
+    console.warn("Chart.js non disponibile (CDN non raggiungibile?) - grafico disabilitato");
+    if (canvas) canvas.style.display = "none";
+    return;
+  }
+  const ctx = canvas.getContext("2d");
   chart = new Chart(ctx, {
     type: "bar",
     data: {

@@ -19,6 +19,11 @@ def send_event(payload: dict, timeout=2.0):
     try:
         resp = requests.post(EVENTS_ENDPOINT, json=payload, headers=headers, timeout=timeout)
         if 200 <= resp.status_code < 300:
+            logger.info(
+                "Evento inviato: track_id=%s tipo=%s",
+                payload.get("track_id"),
+                resp.json().get("tipo_evento", "?"),
+            )
             return True
         logger.warning("Backend ha rifiutato l'evento (%s): %s", resp.status_code, resp.text)
         return False

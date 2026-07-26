@@ -174,6 +174,7 @@ def main():
 
                 if should_send_new_appearance(track_id, last_sent_at):
                     confidence = confidences[0] if confidences else 0.85
+                    logger.info(f"Persona rilevata: track_id={track_id} confidence={confidence:.2f}")
                     payload = {
                         "event_id": str(uuid.uuid4()),
                         "camera": config.CAMERA_CODE,
